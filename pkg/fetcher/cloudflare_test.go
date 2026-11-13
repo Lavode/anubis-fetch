@@ -1,4 +1,4 @@
-package main
+package fetcher
 
 import (
 	"net/http"
@@ -28,7 +28,7 @@ func TestFetchViaHTTPEscalatesOnCloudflareChallenge(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	html, escalate := fetchViaHTTP(options{url: srv.URL, timeout: 5 * time.Second, noCache: true})
+	html, escalate := FetchViaHTTP(Options{URL: srv.URL, Timeout: 5 * time.Second, NoCache: true})
 	if !escalate {
 		t.Fatalf("Cloudflare challenge not escalated; got page %q", html)
 	}
@@ -61,7 +61,7 @@ func TestFetchViaHTTPReusesStoredUserAgent(t *testing.T) {
 	u, _ := url.Parse(srv.URL)
 	writeCookies(u.Host, []*http.Cookie{{Name: clearanceName, Value: clearanceValue}}, browserUA)
 
-	html, escalate := fetchViaHTTP(options{url: srv.URL, timeout: 5 * time.Second})
+	html, escalate := FetchViaHTTP(Options{URL: srv.URL, Timeout: 5 * time.Second})
 	if escalate || html != realPage {
 		t.Fatalf("stored cookie+UA not reused: escalate=%v html=%q", escalate, html)
 	}

@@ -1,4 +1,4 @@
-package main
+package fetcher
 
 import (
 	"context"
@@ -120,10 +120,10 @@ func solvePoW(randomData string, difficulty int) (int, string) {
 	}
 }
 
-// fetchViaHTTP tries the browserless path. It returns the page HTML, or
+// FetchViaHTTP tries the browserless path. It returns the page HTML, or
 // escalate=true if the caller should fall back to a browser.
-func fetchViaHTTP(o options) (html string, escalate bool) {
-	u, err := url.Parse(o.url)
+func FetchViaHTTP(o Options) (html string, escalate bool) {
+	u, err := url.Parse(o.URL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "anubis-fetch: bad url: %v\n", err)
 		return "", true
@@ -133,16 +133,16 @@ func fetchViaHTTP(o options) (html string, escalate bool) {
 	// issued under, since Cloudflare rejects cf_clearance under any other.
 	jar := newJar()
 	storedUA := ""
-	if !o.noCache {
+	if !o.NoCache {
 		storedUA = loadCookies(jar, u)
 	}
-	ua := firstNonEmpty(o.ua, storedUA)
-	client := req.C().ImpersonateChrome().SetTimeout(o.timeout).SetCookieJar(jar)
+	ua := firstNonEmpty(o.UA, storedUA)
+	client := req.C().ImpersonateChrome().SetTimeout(o.Timeout).SetCookieJar(jar)
 	if ua != "" {
 		client.SetCommonHeader("User-Agent", ua)
 	}
 
-	resp, err := client.R().Get(o.url)
+	resp, err := client.R().Get(o.URL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "anubis-fetch: http error: %v; escalating\n", err)
 		return "", true
@@ -158,7 +158,7 @@ func fetchViaHTTP(o options) (html string, escalate bool) {
 
 	// Not walled, or a stored cookie let us straight through.
 	if !isAnubis(html) {
-		if !o.noCache {
+		if !o.NoCache {
 			saveCookies(jar, u, ua)
 		}
 		return html, false
@@ -183,7 +183,7 @@ func fetchViaHTTP(o options) (html string, escalate bool) {
 	var nonce uint64
 	var response string
 	if isWASMMethod(c.method) {
-		ctx, cancel := context.WithTimeout(context.Background(), o.timeout)
+		ctx, cancel := context.WithTimeout(context.Background(), o.Timeout)
 		defer cancel()
 		code, err := fetchWASM(ctx, client, origin, c)
 		if err != nil {
@@ -210,7 +210,7 @@ func fetchViaHTTP(o options) (html string, escalate bool) {
 	q.Set("id", c.id)
 	q.Set("response", response)
 	q.Set("nonce", strconv.FormatUint(nonce, 10))
-	q.Set("redir", o.url)
+	q.Set("redir", o.URL)
 	q.Set("elapsedTime", strconv.FormatInt(elapsed, 10))
 	pass.RawQuery = q.Encode()
 
@@ -224,7 +224,7 @@ func fetchViaHTTP(o options) (html string, escalate bool) {
 		fmt.Fprintln(os.Stderr, "anubis-fetch: solution rejected; escalating to browser")
 		return "", true
 	}
-	if !o.noCache {
+	if !o.NoCache {
 		saveCookies(jar, u, ua) // now holds the Anubis auth cookie
 	}
 	return html2, false

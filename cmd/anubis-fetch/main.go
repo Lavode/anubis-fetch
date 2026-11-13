@@ -25,34 +25,14 @@ import (
 	"os"
 	"time"
 
+	"github.com/fzakaria/anubis-fetch/pkg/fetcher"
 	"jaytaylor.com/html2text"
 )
 
 const (
-	passChallengePath = "/.within.website/x/cmd/anubis/api/pass-challenge"
-	// escalateExit is returned by --no-browser when the in-process solve fails.
+	// EscalateExit is returned by --no-browser when the in-process solve fails.
 	escalateExit = 3
-	// maxDifficulty caps the in-process brute force. Go's SHA-256 is fast
-	// (~16M hashes ≈ a few seconds at difficulty 6); above that a browser's
-	// parallel workers win, so we escalate instead.
-	maxDifficulty = 6
-	defaultUA     = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
-		"(KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
 )
-
-// legacyMethods use the native SHA-256 solver and its hex-digit difficulty cap.
-// WASM methods use the server module and a time budget instead.
-var legacyMethods = map[string]bool{"fast": true, "slow": true}
-
-type options struct {
-	url       string
-	timeout   time.Duration
-	ua        string
-	text      bool
-	browser   bool // skip the solver, go straight to the browser
-	noBrowser bool // never use the browser; exit escalateExit if solving fails
-	noCache   bool // don't read/write the persistent cookie jar
-}
 
 func usage() {
 	fmt.Fprint(os.Stderr, `anubis-fetch — fetch a URL from behind Anubis / Cloudflare bot-walls
@@ -77,19 +57,19 @@ func main() {
 func run() int {
 	o := parseFlags()
 
-	if !o.browser {
-		html, escalate := fetchViaHTTP(o)
+	if !o.Browser {
+		html, escalate := fetcher.FetchViaHTTP(o)
 		if !escalate {
 			output(html, o)
 			return 0
 		}
-		if o.noBrowser {
+		if o.NoBrowser {
 			fmt.Fprintln(os.Stderr, "anubis-fetch: cannot solve in-process and --no-browser is set")
 			return escalateExit
 		}
 	}
 
-	html, err := fetchViaBrowser(o)
+	html, err := fetcher.FetchViaBrowser(o)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "anubis-fetch: browser error: %v\n", err)
 		if html == "" {
@@ -100,15 +80,15 @@ func run() int {
 	return 0
 }
 
-func parseFlags() options {
-	var o options
+func parseFlags() fetcher.Options {
+	var o fetcher.Options
 	var timeoutMs int
 	flag.IntVar(&timeoutMs, "timeout", 30000, "per-step timeout in milliseconds")
-	flag.StringVar(&o.ua, "ua", "", "override User-Agent")
-	flag.BoolVar(&o.text, "text", false, "render readable plain text instead of HTML")
-	flag.BoolVar(&o.browser, "browser", false, "skip the solver; use the browser")
-	flag.BoolVar(&o.noBrowser, "no-browser", false, "never use the browser; exit 3 on failure")
-	flag.BoolVar(&o.noCache, "no-cache", false, "don't read or write the cookie jar")
+	flag.StringVar(&o.UA, "ua", "", "override User-Agent")
+	flag.BoolVar(&o.Text, "text", false, "render readable plain text instead of HTML")
+	flag.BoolVar(&o.Browser, "browser", false, "skip the solver; use the browser")
+	flag.BoolVar(&o.NoBrowser, "no-browser", false, "never use the browser; exit 3 on failure")
+	flag.BoolVar(&o.NoCache, "no-cache", false, "don't read or write the cookie jar")
 	flag.Usage = usage
 	flag.Parse()
 
@@ -116,13 +96,13 @@ func parseFlags() options {
 		usage()
 		os.Exit(2)
 	}
-	o.url = flag.Arg(0)
-	o.timeout = time.Duration(timeoutMs) * time.Millisecond
+	o.URL = flag.Arg(0)
+	o.Timeout = time.Duration(timeoutMs) * time.Millisecond
 	return o
 }
 
-func output(html string, o options) {
-	if o.text {
+func output(html string, o fetcher.Options) {
+	if o.Text {
 		if text, err := html2text.FromString(html, html2text.Options{PrettyTables: true}); err == nil {
 			fmt.Print(text)
 			return

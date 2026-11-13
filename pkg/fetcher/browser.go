@@ -1,4 +1,4 @@
-package main
+package fetcher
 
 import (
 	"context"
@@ -55,15 +55,15 @@ func browserUserAgent(ctx context.Context, bin string) string {
 	return chromeUserAgent(string(out))
 }
 
-// fetchViaBrowser drives a real headless Chromium so that any JavaScript the
+// FetchViaBrowser drives a real headless Chromium so that any JavaScript the
 // site serves — Anubis' preact/metarefresh methods, a future PoW variant, or a
 // Cloudflare active-JS challenge — runs to completion. Cookies obtained are
 // persisted so the next run's HTTP path is let straight through.
-func fetchViaBrowser(o options) (string, error) {
+func FetchViaBrowser(o Options) (string, error) {
 	// The UA must go in as a launch flag: a CDP override does not reach the
 	// cross-origin iframe Cloudflare's Turnstile widget runs in.
 	bin := lookupChromium()
-	ua := o.ua
+	ua := o.UA
 	if ua == "" {
 		ua = browserUserAgent(context.Background(), bin)
 	}
@@ -91,17 +91,17 @@ func fetchViaBrowser(o options) (string, error) {
 	// chromedp's ten-second default, which a loaded machine can blow past
 	// while Chromium is still starting up.
 	ctx, cancelCtx := chromedp.NewContext(allocCtx,
-		chromedp.WithBrowserOption(chromedp.WithDialTimeout(o.timeout)),
+		chromedp.WithBrowserOption(chromedp.WithDialTimeout(o.Timeout)),
 	)
 	defer cancelCtx()
-	ctx, cancelTimeout := context.WithTimeout(ctx, o.timeout)
+	ctx, cancelTimeout := context.WithTimeout(ctx, o.Timeout)
 	defer cancelTimeout()
 
 	var html string
 	var cookies []*network.Cookie
 	err := chromedp.Run(ctx,
 		network.Enable(),
-		chromedp.Navigate(o.url),
+		chromedp.Navigate(o.URL),
 		waitChallengeResolved(),
 		chromedp.OuterHTML("html", &html, chromedp.ByQuery),
 		chromedp.ActionFunc(func(ctx context.Context) error {
@@ -113,8 +113,8 @@ func fetchViaBrowser(o options) (string, error) {
 		}),
 	)
 
-	if !o.noCache && len(cookies) > 0 {
-		if u, perr := url.Parse(o.url); perr == nil {
+	if !o.NoCache && len(cookies) > 0 {
+		if u, perr := url.Parse(o.URL); perr == nil {
 			writeCookies(u.Host, toHTTPCookies(cookies), ua)
 		}
 	}
